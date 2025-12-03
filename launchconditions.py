@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # MIT License
 #
 # Copyright (c) 2025 Martin Hohenberg <martin@hohenberg.jp>
@@ -20,7 +22,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-#!/usr/bin/env python3
 from __future__ import annotations
 
 from dataclasses import dataclass, field
