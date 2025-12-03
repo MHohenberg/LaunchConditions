@@ -199,12 +199,22 @@ class NewTaskScreen(ModalScreen[Optional[tuple[str, str]]]):
         if event.button.id == "ok":
             name = self.query_one("#name", Input).value.strip()
             due = self.query_one("#due", Input).value.strip()
+
             if not name:
-                # No name? No task! Just stay in the dialogue
+                # No name? No task!
                 return
+
+            # Verhindere kaputte Dateiformate
+            if ":" in name or ":" in due:
+                # Kleine Rückmeldung an den Nutzer
+                self.app.notify(
+                    "':' is not allowed in task name or due field.",
+                    severity="warning",
+                )
+                return
+
             self.dismiss((name, due))
         else:
-            # Cancel
             self.dismiss(None)
 
 class LaunchConditionsApp(App):
@@ -236,6 +246,27 @@ class LaunchConditionsApp(App):
         self.task_file = task_file
         self.title = "Launch Conditions [{}]".format(task_file)
         self.roots: List[Task] = []
+
+    def save_with_handling(self, show_success: bool = False) -> bool:
+        """Save tasks to file with error handling.
+
+        Returns:
+            True if save succeeded, False if there was an error.
+        """
+        try:
+            save_tasks_to_file(self.task_file, self.roots)
+        except OSError as e:
+            # Show Error in UI and log to std.err
+            self.notify(
+                f"ERROR saving {self.task_file}: {e}",
+                severity="error",
+            )
+            print(f"[launchconditions] ERROR saving {self.task_file}: {e}", file=sys.stderr)
+            return False
+        else:
+            if show_success:
+                self.notify(f"Saved to {self.task_file}", severity="information")
+            return True
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -296,10 +327,15 @@ class LaunchConditionsApp(App):
 
         if tasks:
             if keep_selection and old_index is not None:
-                new_index = min(old_index, len(tasks) - 1)
-                task_list_view.index = new_index
-            elif task_list_view.index is None:
+                task_list_view.index = min(old_index, len(tasks) - 1)
+            else:
                 task_list_view.index = 0
+
+            if had_focus:
+                task_list_view.focus()
+        else:
+            # No tasks → no index, no focus
+            task_list_view.index = None
 
             if had_focus and task_list_view.index is not None:
                 task_list_view.focus()
@@ -333,7 +369,7 @@ class LaunchConditionsApp(App):
         task.propagate_up()
 
         self.refresh_task_list()
-        save_tasks_to_file(self.task_file, self.roots)
+        self.save_with_handling()
 
     def action_add_subtask(self) -> None:
         """Create a new (sub)task – starts Worker."""
@@ -366,15 +402,15 @@ class LaunchConditionsApp(App):
             new.propagate_up()
 
         self.refresh_task_list()
-        save_tasks_to_file(self.task_file, self.roots)
+        self.save_with_handling()
 
     def action_save(self) -> None:
-        save_tasks_to_file(self.task_file, self.roots)
+        self.save_with_handling(show_success=True)
         self.notify(f"Saved to {self.task_file}", severity="information")
 
     def action_quit(self) -> None:
         # Save before quitting
-        save_tasks_to_file(self.task_file, self.roots)
+        self.save_with_handling()
         self.exit()
 
 def main():
