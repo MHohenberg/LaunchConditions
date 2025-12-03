@@ -62,12 +62,30 @@ class Task:
             else:
                 self.status = "OPEN"
 
-    def propagate_up(self):
-        node: Optional[Task] = self
-        while node is not None:
-            if node.children:
-                node.recalc_status_from_children()
-            node = node.parent
+    def propagate_up(self) -> None:
+        """Recompute this task's status based on its children and propagate to parents.
+
+        Rules:
+        - If there are no children, do nothing (leaf keeps its own status).
+        - If ALL children are DONE -> this task is DONE.
+        - If ALL children are OPEN -> this task is OPEN.
+        - Otherwise -> this task is IN_PROGRESS.
+        """
+        if not self.children:
+            # Leaf node; nothing to recompute here
+            return
+
+        child_statuses = [child.status for child in self.children]
+
+        if all(s == "DONE" for s in child_statuses):
+            self.status = "DONE"
+        elif all(s == "OPEN" for s in child_statuses):
+            self.status = "OPEN"
+        else:
+            self.status = "IN_PROGRESS"
+
+        if self.parent is not None:
+            self.parent.propagate_up()
 
 def parse_tasks_from_file(path: str) -> List[Task]:
     tasks: List[Task] = []
@@ -93,7 +111,7 @@ def parse_tasks_from_file(path: str) -> List[Task]:
 
         parts = content.split(":", 2)
         if len(parts) != 3:
-            raise ValueError(f"Ungültige Zeile: {raw}")
+            raise ValueError(f"Invalid line: {raw}")
         name, status, due = parts
         name = name.strip()
         status = status.strip() or STATUS_DEFAULT
@@ -106,7 +124,7 @@ def parse_tasks_from_file(path: str) -> List[Task]:
             stack = [task]
         else:
             if depth > len(stack):
-                raise ValueError(f"Zu tiefe Einrückung: {raw}")
+                raise ValueError(f"Nested too deeply: {raw}")
             parent = stack[depth - 1]
             task.parent = parent
             parent.children.append(task)
@@ -117,7 +135,7 @@ def parse_tasks_from_file(path: str) -> List[Task]:
                 stack[depth] = task
                 stack = stack[: depth + 1]
 
-    # bottom-up Status berechnen
+    # calculate status from the bottom up
     def walk(task_to_walk: Task):
         for ch in task_to_walk.children:
             walk(ch)
@@ -166,16 +184,16 @@ def status_symbol(status: str) -> str:
     }.get(status, "?")
 
 class NewTaskScreen(ModalScreen[Optional[tuple[str, str]]]):
-    """Modaler Dialog für neuen Task (Name + Due)."""
+    """Modular dialog for adding a new task."""
 
     def compose(self) -> ComposeResult:
         yield Vertical(
-            Static("Neuen Task anlegen", id="title"),
+            Static("Add new task", id="title"),
             Input(placeholder="Name", id="name"),
             Input(placeholder="Due (optional)", id="due"),
             Horizontal(
                 Button("OK", id="ok"),
-                Button("Abbrechen", id="cancel"),
+                Button("Cancel", id="cancel"),
                 id="buttons",
             ),
             id="dialog",
@@ -186,11 +204,11 @@ class NewTaskScreen(ModalScreen[Optional[tuple[str, str]]]):
             name = self.query_one("#name", Input).value.strip()
             due = self.query_one("#due", Input).value.strip()
             if not name:
-                # Ohne Namen kein Task – einfach im Dialog bleiben
+                # No name? No task! Just stay in the dialogue
                 return
             self.dismiss((name, due))
         else:
-            # Abbrechen
+            # Cancel
             self.dismiss(None)
 
 class LaunchConditionsApp(App):
@@ -217,10 +235,10 @@ class LaunchConditionsApp(App):
         ("space", "toggle_status", "Toggle status"),
     ]
 
-    def __init__(self, taskfile: str, **kwargs) -> None:
+    def __init__(self, task_file: str, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.taskfile = taskfile
-        self.title = "Launch Conditions [{}]".format(taskfile)
+        self.task_file = task_file
+        self.title = "Launch Conditions [{}]".format(task_file)
         self.roots: List[Task] = []
 
     def compose(self) -> ComposeResult:
@@ -230,7 +248,7 @@ class LaunchConditionsApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.roots = parse_tasks_from_file(self.taskfile)
+        self.roots = parse_tasks_from_file(self.task_file)
         self.refresh_task_list(keep_selection=False)
 
         list_view = self.get_task_list()
@@ -238,7 +256,7 @@ class LaunchConditionsApp(App):
             list_view.index = 0
             list_view.focus()
 
-    # --- Hilfsfunktionen ---
+    # --- Helper functions ---
 
     def get_task_list(self) -> ListView:
         return self.query_one("#task_list", ListView)
@@ -260,7 +278,7 @@ class LaunchConditionsApp(App):
         summary.update(summary_text)
 
     def refresh_task_list(self, keep_selection: bool = True) -> None:
-        """ListView aus dem aktuellen Modell neu aufbauen."""
+        """Refresh ListView from current model."""
         task_list_view = self.get_task_list()
         had_focus = task_list_view.has_focus
         old_index = task_list_view.index if keep_selection else None
@@ -307,7 +325,6 @@ class LaunchConditionsApp(App):
         if task is None:
             return
         if not task.is_leaf():
-            # Parent-Status bleibt abgeleitet
             return
 
         try:
@@ -316,31 +333,32 @@ class LaunchConditionsApp(App):
             idx = 0
 
         task.status = STATUS_CYCLE[(idx + 1) % len(STATUS_CYCLE)]
+
         task.propagate_up()
+
         self.refresh_task_list()
-        save_tasks_to_file(self.taskfile, self.roots)
+        save_tasks_to_file(self.task_file, self.roots)
 
     def action_add_subtask(self) -> None:
-        """Neuen (Sub-)Task mit Name + Due anlegen – startet Worker."""
+        """Create a new (sub)task – starts Worker."""
         parent = self.get_selected_task()
         self.run_worker(self._add_subtask_worker(parent), exclusive=True)
 
     async def _add_subtask_worker(self, parent: Optional[Task]) -> None:
-        """Worker, der den Dialog anzeigt und den neuen Task ins Modell einträgt."""
+        """Worker, shows a modal dialogue, adds task."""
         result = await self.push_screen_wait(NewTaskScreen())
         if result is None:
-            # Abgebrochen
             return
 
         name, due = result
 
         if parent is None:
-            # Erster Root-Task
+            # First Root-Task
             new_root = Task(name=name, status="OPEN", due=due, depth=0)
             self.roots.append(new_root)
             new_root.propagate_up()
         else:
-            # Subtask unter aktuellem Task
+            # Subtask under current Task
             new = Task(
                 name=name,
                 status="OPEN",
@@ -352,24 +370,24 @@ class LaunchConditionsApp(App):
             new.propagate_up()
 
         self.refresh_task_list()
-        save_tasks_to_file(self.taskfile, self.roots)
+        save_tasks_to_file(self.task_file, self.roots)
 
     def action_save(self) -> None:
-        save_tasks_to_file(self.taskfile, self.roots)
-        self.notify(f"Gespeichert nach {self.taskfile}", severity="information")
+        save_tasks_to_file(self.task_file, self.roots)
+        self.notify(f"Saved to {self.task_file}", severity="information")
 
     def action_quit(self) -> None:
-        # vor dem Beenden nochmal speichern
-        save_tasks_to_file(self.taskfile, self.roots)
+        # Save before quitting
+        save_tasks_to_file(self.task_file, self.roots)
         self.exit()
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: launchconditions_textual.py <taskfile.lc>")
-        print("       No taskfile? just create an empty text file")
+        print("Usage: launchconditions_textual.py <task_file.lc>")
+        print("       No task_file? just create an empty text file")
         sys.exit(1)
-    taskfile = sys.argv[1]
-    app = LaunchConditionsApp(taskfile)
+    task_file = sys.argv[1]
+    app = LaunchConditionsApp(task_file)
     app.run()
 
 if __name__ == "__main__":
