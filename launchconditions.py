@@ -76,17 +76,10 @@ class Task:
         - If ALL children are OPEN -> this task is OPEN.
         - Otherwise -> this task is IN_PROGRESS.
         """
+
         if self.children:
-            child_statuses = [child.status for child in self.children]
+            self.recalc_status_from_children()
 
-            if all(s == "DONE" for s in child_statuses):
-                self.status = "DONE"
-            elif all(s == "OPEN" for s in child_statuses):
-                self.status = "OPEN"
-            else:
-                self.status = "IN_PROGRESS"
-
-        # Egal ob Leaf oder Parent: nach oben weiterreichen
         if self.parent is not None:
             self.parent.propagate_up()
 
