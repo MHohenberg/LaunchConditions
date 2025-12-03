@@ -1,2 +1,4 @@
 .idea/*
 *lc
+build/
+launchconditions.egg-info/

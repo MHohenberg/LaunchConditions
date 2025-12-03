@@ -204,9 +204,8 @@ class NewTaskScreen(ModalScreen[Optional[tuple[str, str]]]):
                 # No name? No task!
                 return
 
-            # Verhindere kaputte Dateiformate
+            # Prevent file-breaking :-characters
             if ":" in name or ":" in due:
-                # Kleine Rückmeldung an den Nutzer
                 self.app.notify(
                     "':' is not allowed in task name or due field.",
                     severity="warning",
