@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "launchconditions"
+version = "0.1.0"
+description = "Terminal Launch Conditions checklist with nested tasks using Textual"
+authors = [
+  { name = "Martin Hohenberg", email = "martin@hohenberg.jp" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "textual>=6.7.1",
+  "rich>=14.2.0",
+]
+
+[project.scripts]
+lc = "launchconditions:main"
+
+[tool.setuptools]
+py-modules = ["launchconditions"]

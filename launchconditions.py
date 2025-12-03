@@ -365,7 +365,8 @@ class LaunchConditionsApp(App):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: launchconditions_textual.py <taskfile.txt>")
+        print("Usage: launchconditions_textual.py <taskfile.lc>")
+        print("       No taskfile? just create an empty text file")
         sys.exit(1)
     taskfile = sys.argv[1]
     app = LaunchConditionsApp(taskfile)
