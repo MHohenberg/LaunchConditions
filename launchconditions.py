@@ -54,36 +54,39 @@ class Task:
     def recalc_status_from_children(self):
         if not self.children:
             return
-        if any(ch.status == "OPEN" for ch in self.children):
+
+        child_statuses = [ch.status for ch in self.children]
+
+        # 1) If everything is DONE → DONE
+        if all(s == "DONE" for s in child_statuses):
+            self.status = "DONE"
+        # 2) If everything is OPEN → OPEN
+        elif all(s == "OPEN" for s in child_statuses):
             self.status = "OPEN"
+        # 3) else → IN_PROGRESS
         else:
-            if all(ch.status == "DONE" for ch in self.children):
-                self.status = "DONE"
-            else:
-                self.status = "OPEN"
+            self.status = "IN_PROGRESS"
 
     def propagate_up(self) -> None:
         """Recompute this task's status based on its children and propagate to parents.
 
         Rules:
-        - If there are no children, do nothing (leaf keeps its own status).
+        - If there are no children, only propagate upward.
         - If ALL children are DONE -> this task is DONE.
         - If ALL children are OPEN -> this task is OPEN.
         - Otherwise -> this task is IN_PROGRESS.
         """
-        if not self.children:
-            # Leaf node; nothing to recompute here
-            return
+        if self.children:
+            child_statuses = [child.status for child in self.children]
 
-        child_statuses = [child.status for child in self.children]
+            if all(s == "DONE" for s in child_statuses):
+                self.status = "DONE"
+            elif all(s == "OPEN" for s in child_statuses):
+                self.status = "OPEN"
+            else:
+                self.status = "IN_PROGRESS"
 
-        if all(s == "DONE" for s in child_statuses):
-            self.status = "DONE"
-        elif all(s == "OPEN" for s in child_statuses):
-            self.status = "OPEN"
-        else:
-            self.status = "IN_PROGRESS"
-
+        # Egal ob Leaf oder Parent: nach oben weiterreichen
         if self.parent is not None:
             self.parent.propagate_up()
 
