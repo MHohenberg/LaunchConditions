@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "launchconditions"
-version = "0.1.1"
+version = "0.1.2"
 description = "Terminal Launch Conditions checklist with nested tasks using Textual"
 authors = [
   { name = "Martin Hohenberg", email = "martin@hohenberg.jp" }

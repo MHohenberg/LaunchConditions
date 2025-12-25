@@ -1,4 +1,5 @@
 .idea/*
 *lc
+*lct
 build/
 launchconditions.egg-info/

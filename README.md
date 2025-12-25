@@ -73,18 +73,10 @@ git clone https://github.com/yourname/LaunchConditions.git
 cd LaunchConditions
 ```
 
-### 2. Create and activate a virtual environment
+### 2. install with pipx
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate  # on macOS/Linux
-# .venv\Scripts\activate   # on Windows PowerShell
-```
-
-### 3. Install dependencies
-
-```bash
-pip install textual rich
+pipx install -e .
 ```
 
 (If you already have `rich` from other projects, that's fine – Textual uses it under the hood.)
@@ -96,13 +88,13 @@ pip install textual rich
 Run the TUI and pass the path to your task file:
 
 ```bash
-./launchconditions_textual.py tasks.txt
+lc tasks.lc
 ```
 
 or explicitly via Python:
 
 ```bash
-python launchconditions_textual.py tasks.txt
+python launchconditions.py tasks.txt
 ```
 
 > **Note:** The task file must exist or be creatable in the given path. The program will read existing tasks and write back all changes to the same file.
