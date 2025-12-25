@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 import shutil
+from importlib.metadata import version, PackageNotFoundError
 from typing import List, Optional
 import re
 import sys
@@ -423,9 +424,14 @@ class LaunchConditionsApp(App):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: launchconditions_textual.py <task_file.lc[t]>")
+        try:
+            __version__ = version("launchconditions")
+        except PackageNotFoundError:
+            __version__ = "0.0.0-dev"
+        print("LaunchConditions version:", __version__)
+        print("Usage: lc <task_file.lc[t]>")
         print("       files ending with lct are considered templates and will be copied to filename.[timestamp].lc, then opened")
-        print("       No task_file? just create an empty text file")
+        print("       No task_file? just touch an empty text file")
         sys.exit(1)
     task_file = sys.argv[1]
     app = LaunchConditionsApp(task_file)
