@@ -139,7 +139,8 @@ This makes the application very suitable for checklists like:
 
 ## Example workflow
 
-1. Create a `tasks.txt` file:
+### Singlular project
+1. Create a `tasks.lc` file:
 
    ```text
    Launch day routine:OPEN:
@@ -150,13 +151,25 @@ This makes the application very suitable for checklists like:
 2. Start the TUI:
 
    ```bash
-   ./launchconditions_textual.py tasks.txt
+   ./launchconditions_textual.py tasks.lc
    ```
-
 3. Use **↑ / ↓** to select a task.
 4. Press **Space** to toggle the status of a leaf task.
 5. Press **a** to add a subtask under the currently selected task – you will be prompted for name and optional due date.
 6. Press **s** or **q** to save.
+
+### Template
+
+Templates are useful for recurring subprojects, e.g. for 'packing lists' for travelling.
+
+1. Create a 'template.lct' file. Often this is easiest by creating an lc file and filling it within the tui...
+
+2. Start the tui
+   ```bash
+   ./launchconditions_textual.py template.lct
+   ```
+3. The system copies template.lct into something like template.20251225-180000.lc and opens that file. 
+
 
 ---
 
