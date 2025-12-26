@@ -1,0 +1,7 @@
+# Move me to [homedir]/.launchconditions
+[theme]
+name=textual-dark
+
+[templates]
+template_dir=./lc_templates/
+timestamp = "%Y%m%d"

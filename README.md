@@ -129,32 +129,11 @@ This makes the application very suitable for checklists like:
 
 ---
 
-## Example workflow
-
-### Singlular project
-1. Create a `tasks.lc` file:
-
-   ```text
-   Launch day routine:OPEN:
-       Coffee:DONE:
-       Check LaunchConditions:OPEN:
-   ```
-
-2. Start the TUI:
-
-   ```bash
-   ./launchconditions_textual.py tasks.lc
-   ```
-3. Use **↑ / ↓** to select a task.
-4. Press **Space** to toggle the status of a leaf task.
-5. Press **a** to add a subtask under the currently selected task – you will be prompted for name and optional due date.
-6. Press **s** or **q** to save.
-
 ### Template
 
 Templates are useful for recurring subprojects, e.g. for 'packing lists' for travelling.
 
-1. Create a 'template.lct' file. Often this is easiest by creating an lc file and filling it within the tui...
+1. Create a 'template.lct' file. Often this is easiest by creating an lc file and filling it within the tui... alternatively you can create a template file from any lc file inside launchcontrol
 
 2. Start the tui
    ```bash
@@ -162,8 +141,28 @@ Templates are useful for recurring subprojects, e.g. for 'packing lists' for tra
    ```
 3. The system copies template.lct into something like template.20251225-180000.lc and opens that file. 
 
+## Configuration (`~/.launchconditions`)
 
----
+LaunchConditions can be customized via a simple INI-style config file located at  
+`~/.launchconditions`.
+
+```ini
+[theme]
+name=textual-dark
+
+[templates]
+template_dir=./lc_templates/
+timestamp=%Y%m%d
+```
+
+#### [theme]
+* name sets the Textual color theme (e.g. textual-dark, textual-light, dracula, tokyo-night).
+
+#### [templates]
+* template_dir specifies where .lct template files are searched if they are not found in the current directory.
+* timestamp controls how new .lc files created from templates are named, using Python strftime syntax.
+
+If the config file does not exist, LaunchConditions falls back to sensible defaults.
 
 ## Roadmap / Ideas
 
