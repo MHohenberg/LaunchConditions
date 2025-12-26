@@ -27,10 +27,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 import shutil
+from pathlib import Path
 from importlib.metadata import version, PackageNotFoundError
 from typing import List, Optional
 import re
+import os
 import sys
+import configparser
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -86,13 +89,12 @@ class Task:
         if self.parent is not None:
             self.parent.propagate_up()
 
-def parse_tasks_from_file(path: str) -> List[Task]:
+def parse_tasks_from_file(path: Path) -> List[Task]:
     tasks: List[Task] = []
     stack: List[Task] = []
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         return []
 
@@ -158,14 +160,27 @@ def flatten_tasks(roots: List[Task]) -> List[Task]:
         walk(t)
     return result
 
-def save_tasks_to_file(path: str, roots: List[Task]):
-    lines = []
+def save_tasks_to_file(path: Path, roots: List[Task]):
+    lines: list[str] = []
     for t in flatten_tasks(roots):
         indent = " " * 4 * t.depth
-        line = f"{indent}{t.name}:{t.status}:{t.due}"
-        lines.append(line)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
+        lines.append(f"{indent}{t.name}:{t.status}:{t.due}")
+
+    # Optional: ensure directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+def make_template(path: Path, roots: List[Task]):
+    lines: list[str] = []
+    for t in flatten_tasks(roots):
+        indent = " " * 4 * t.depth
+        lines.append(f"{indent}{t.name}:OPEN:")
+
+    # Optional: ensure directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 def status_style(status: str) -> str:
     if status == "DONE":
@@ -239,21 +254,30 @@ class LaunchConditionsApp(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("s", "save", "Save"),
+        ("t", "template", "Template from file"),
         ("a", "add_subtask", "Add subtask"),
         ("space", "toggle_status", "Toggle status"),
     ]
 
-    def __init__(self, task_file: str, **kwargs) -> None:
+    def __init__(self, task_file: Path, cfg: configparser.ConfigParser, **kwargs) -> None:
         super().__init__(**kwargs)
+        self.cfg = cfg
 
-        if task_file.endswith('lct'):
+        # Template handling
+        if task_file.suffix == ".lct":
             template_filename = task_file
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            task_file = task_file[:-3]+timestamp+".lc"
+            timestamp = datetime.now().strftime(
+                self.cfg.get("templates", "timestamp", fallback="%Y%m%d-%H%M%S")
+            )
+            task_file = task_file.with_name(
+                task_file.stem + timestamp + ".lc"
+            )
             shutil.copy(template_filename, task_file)
 
-        self.task_file = task_file
-        self.title = "Launch Conditions [{}]".format(task_file)
+        self.theme = self.cfg.get("theme", "name", fallback="textual-light")
+
+        self.task_file: Path = task_file
+        self.title = f"Launch Conditions [{task_file}]"
         self.roots: List[Task] = []
 
     def save_with_handling(self, show_success: bool = False) -> bool:
@@ -276,6 +300,23 @@ class LaunchConditionsApp(App):
             if show_success:
                 self.notify(f"Saved to {self.task_file}", severity="information")
             return True
+
+    def template(self, file_name: Path, show_success: bool = False) -> bool:
+        try:
+            make_template(file_name, self.roots)
+        except OSError as e:
+            # Show Error in UI and log to std.err
+            self.notify(
+                f"ERROR template-generating from {self.task_file} to {file_name}: {e}",
+                severity="error",
+            )
+            print(f"[launchconditions] ERROR template-generating from {self.task_file} to {file_name}: {e}", file=sys.stderr)
+            return False
+        else:
+            if show_success:
+                self.notify(f"Generated new templatee in {file_name}", severity="information")
+            return True
+
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -417,6 +458,13 @@ class LaunchConditionsApp(App):
         self.save_with_handling(show_success=True)
         self.notify(f"Saved to {self.task_file}", severity="information")
 
+    def action_template(self) -> None:
+        template_dir = Path(self.cfg.get("templates", "template_dir", fallback="."))
+        template_filename = (template_dir / self.task_file.with_suffix(".lct").name)
+
+        self.template(template_filename, show_success=True)
+        self.notify(f"saved to {template_filename}", severity="information")
+
     def action_quit(self) -> None:
         # Save before quitting
         self.save_with_handling()
@@ -431,10 +479,45 @@ def main():
         print("LaunchConditions version:", __version__)
         print("Usage: lc <task_file.lc[t]>")
         print("       files ending with lct are considered templates and will be copied to filename.[timestamp].lc, then opened")
-        print("       No task_file? just touch an empty text file")
+        print("       templates are first picked from the current directory, of not found, then from the template directory")
         sys.exit(1)
-    task_file = sys.argv[1]
-    app = LaunchConditionsApp(task_file)
+
+    config_path = Path.home() / ".launchconditions"
+    cfg = configparser.ConfigParser()
+
+    if os.path.exists(config_path):
+        cfg.read(config_path)
+    else:
+        print(f"No {config_path} file found. Defaulting to standard settings")
+
+    task_file = Path(sys.argv[1])
+
+    # Case 1: normal task file (.lc)
+    if task_file.suffix == ".lc":
+        if not task_file.exists():
+            task_file.touch()
+
+    # Case 2: template file (.lct)
+    elif task_file.suffix == ".lct":
+        if not task_file.exists():
+            template_dir = Path(cfg.get("templates", "template_dir", fallback="."))
+            candidate = template_dir / task_file.name
+
+            if candidate.exists():
+                task_file = candidate
+            else:
+                print(
+                    f"Template file {task_file.name} was not found "
+                    f"in current directory or template directory {template_dir}."
+                )
+                sys.exit(2)
+
+    # anything else is an error
+    else:
+        print(f"Unsupported file type: {task_file}")
+        sys.exit(2)
+
+    app = LaunchConditionsApp(task_file, cfg)
     app.run()
 
 if __name__ == "__main__":
